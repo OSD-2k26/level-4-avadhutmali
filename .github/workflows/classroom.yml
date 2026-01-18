@@ -1,0 +1,60 @@
+name: Level 4 Autograding
+
+on: [push]
+
+jobs:
+  grade:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0   # FULL history required
+
+      - name: Validate Level 4
+        run: |
+          set -e
+
+          FILE="artifact.txt"
+
+          echo "🔍 Checking commit count..."
+          COMMIT_COUNT=$(git rev-list --count HEAD)
+          if [ "$COMMIT_COUNT" -lt 4 ]; then
+            echo "❌ Expected at least 4 commits, found $COMMIT_COUNT"
+            exit 1
+          fi
+
+          echo "🔍 Checking artifact exists..."
+          if [ ! -f "$FILE" ]; then
+            echo "❌ artifact.txt does not exist"
+            exit 1
+          fi
+
+          echo "🔍 Extracting commit messages (oldest → newest)..."
+          COMMITS=$(git log --reverse --pretty=%B | tr '[:upper:]' '[:lower:]')
+
+          REQUIRED=("correct" "broke" "failed-fix")
+          INDEX=0
+
+          while read -r msg; do
+            if [ "$msg" = "${REQUIRED[$INDEX]}" ]; then
+              INDEX=$((INDEX + 1))
+              [ "$INDEX" -eq 3 ] && break
+            fi
+          done <<< "$COMMITS"
+
+          if [ "$INDEX" -lt 3 ]; then
+            echo "❌ Required commit sequence not found"
+            echo "   Expected (in order): correct → broke → failed-fix"
+            exit 1
+          fi
+
+          echo "🔍 Verifying history was NOT rewritten..."
+
+          # Detect squash/rebase by ensuring commit count > sequence length
+          if [ "$COMMIT_COUNT" -eq 3 ]; then
+            echo "❌ History too clean — looks squashed or rewritten"
+            exit 1
+          fi
+
+          echo "🎉 LEVEL 4 PASSED"
